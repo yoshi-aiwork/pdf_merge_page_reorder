@@ -1,4 +1,4 @@
-import re, io, base64
+import re, io, base64, tempfile, os
 from typing import List, Tuple
 import fitz                         # PyMuPDF
 from PIL import Image
@@ -46,34 +46,43 @@ def parse_final_order(order_str: str) -> List[Tuple[str, int]]:
     return out
 
 def pdf_page_to_thumbnail(pdf_path: str, page_num: int, thumb_w: int = 160) -> str:
-    """Return base64 PNG Data-URI for page thumbnail (~10-20 KB)."""
+    """Return temporary file path for page thumbnail."""
     try:
-        doc  = fitz.open(pdf_path)
+        doc = fitz.open(pdf_path)
     except fitz.fitz.FitzError as e:
         print(f"Error opening PDF {pdf_path}: {e}")
         return ""
 
     if not (0 < page_num <= len(doc)):
         print(f"Page number {page_num} is out of range for PDF {pdf_path}.")
+        doc.close()
         return ""
         
     page = doc[page_num - 1]
 
     # Calculate the appropriate scaling factor
     if page.rect.width == 0:
+        doc.close()
         return "" # Avoid division by zero for empty pages
+    
     zoom = thumb_w / page.rect.width  # Zoom factor to make the width approx. thumb_w pixels
-    mat  = fitz.Matrix(zoom, zoom)
+    mat = fitz.Matrix(zoom, zoom)
 
     try:
-        pix  = page.get_pixmap(matrix=mat, alpha=False)
-        img  = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     except (RuntimeError, ValueError) as e:
         print(f"Error generating thumbnail for page {page_num} of {pdf_path}: {e}")
+        doc.close()
         return ""
 
-    buf = io.BytesIO()
-    img.save(buf, format="PNG", optimize=True)
     doc.close()
-    data_uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    return data_uri
+    
+    # Save thumbnail to temporary file
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_file:
+            img.save(tmp_file, format="PNG", optimize=True)
+            return tmp_file.name
+    except Exception as e:
+        print(f"Error saving thumbnail: {e}")
+        return ""
