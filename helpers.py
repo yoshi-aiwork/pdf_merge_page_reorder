@@ -1,5 +1,8 @@
 import re
 from typing import List, Tuple
+import fitz  # PyMuPDF
+from PIL import Image
+import io, base64
 
 PAGE_RE   = re.compile(r"([AB])[:]?([0-9]+(?:-[0-9]+)?)", re.I)
 SEP_RE    = re.compile(r"[ ,;]+")
@@ -38,3 +41,13 @@ def parse_final_order(order_str: str) -> List[Tuple[str,int]]:
         else:
             out.append((src, int(spec)))
     return out
+
+def pdf_page_to_thumbnail(pdf_path: str, page_num: int, thumb_w=160):
+    doc  = fitz.open(pdf_path)
+    page = doc[page_num-1]
+    pix  = page.get_pixmap(matrix=fitz.Matrix(thumb_w/100, thumb_w/100))
+    img  = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    buf  = io.BytesIO()
+    img.save(buf, format="PNG")
+    data_uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    return data_uri
