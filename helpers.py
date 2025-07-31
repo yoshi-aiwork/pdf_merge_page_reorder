@@ -46,8 +46,6 @@ def pdf_page_to_thumbnail(pdf_path: str, page_num: int, thumb_w=160):
     doc  = fitz.open(pdf_path)
     page = doc[page_num-1]
     pix  = page.get_pixmap(matrix=fitz.Matrix(thumb_w/100, thumb_w/100))
-    img  = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-    buf  = io.BytesIO()
-    img.save(buf, format="PNG")
-    data_uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    png_data = pix.tobytes("png")
+    data_uri = "data:image/png;base64," + base64.b64encode(png_data).decode()
     return data_uri

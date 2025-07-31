@@ -4,24 +4,33 @@ from helpers import parse_ranges, parse_final_order, pdf_page_to_thumbnail
 
 def build_gallery(pdf_a_path, rng_a, pdf_b_path, rng_b):
     thumbs, meta = [], []
+    if not pdf_a_path or not pdf_b_path:
+        raise gr.Error("Please upload both PDF files.")
     mapping = {"A": (pdf_a_path, parse_ranges(rng_a)),
                "B": (pdf_b_path, parse_ranges(rng_b))}
     for src, (path, pages) in mapping.items():
-        for p in pages:
-            thumb = pdf_page_to_thumbnail(path, p)
-            thumbs.append(thumb)
-            meta.append(json.dumps({"src": src, "page": p}))  # keep track
+        if path and pages:
+            for p in pages:
+                try:
+                    thumb = pdf_page_to_thumbnail(path, p)
+                    thumbs.append(thumb)
+                    meta.append(json.dumps({"src": src, "page": p}))  # keep track
+                except Exception as e:
+                    gr.Warning(f"Skipping page {src}{p}: {e}")
+    if not thumbs:
+        gr.Warning("No pages selected or an error occurred.")
     return thumbs, meta
 
-def build_pdf_drag(meta_json_list, layout):
+def build_pdf_drag(meta_json_list, layout, pdf_a_path, pdf_b_path):
     """meta_json_list is a list of json strings in gallery order."""
     writer = PdfWriter()
+    pdf_paths = {"A": pdf_a_path, "B": pdf_b_path}
     readers = {}
     for meta_json in meta_json_list:
         item = json.loads(meta_json)
         src, page = item["src"], item["page"]
         if src not in readers:
-            readers[src] = PdfReader(globals()[f"pdf_{src.lower()}_path"])
+            readers[src] = PdfReader(pdf_paths[src])
         writer.add_page(readers[src].pages[page-1])
     # TODO 2‑Up layout if requested
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
@@ -68,34 +77,38 @@ with gr.Blocks(title="PDF Extract & Merge") as demo:
         pages_b = gr.Textbox(label="Pages from B (e.g. 2,4)")
 
     ordering_mode = gr.Radio(["Drag‑and‑Drop", "Manual Text"], value="Drag‑and‑Drop", label="Ordering Mode")
+    build_btn = gr.Button("Build Thumbnails")
     gallery       = gr.Gallery(label="Reorder Pages (drag)", interactive=True, visible=True, columns=[5])
     gallery_meta  = gr.State([])  # parallel list storing meta json
 
     final_order   = gr.Textbox(label="Final Order (A1‑3,B5,A10)", visible=False)
     layout        = gr.Radio(["Sequential", "2‑Up"], value="Sequential", label="Layout")
+    
     generate      = gr.Button("Generate PDF")
     result        = gr.File(label="Merged PDF")
 
     # Build thumbnails when ranges are entered / files uploaded
-    build_btn = gr.Button("Build Thumbnails")
     build_btn.click(build_gallery, inputs=[pdf_a, pages_a, pdf_b, pages_b],
                     outputs=[gallery, gallery_meta])
 
     # Toggle visibility based on ordering mode
     def toggle(mode):
-        return gr.update(visible=(mode=="Drag‑and‑Drop")), gr.update(visible=(mode=="Manual Text"))
-    ordering_mode.change(toggle, inputs=ordering_mode, outputs=[gallery, final_order])
+        visibility = mode == "Drag‑and‑Drop"
+        return gr.update(visible=visibility), gr.update(visible=visibility), gr.update(visible=not visibility)
+    ordering_mode.change(toggle, inputs=ordering_mode, outputs=[build_btn, gallery, final_order])
 
     # Generate PDF depending on mode
-    def build_pdf_combined(mode, meta, order, lay, pdf_a_path, pages_a_str, pdf_b_path, pages_b_str):
+    def build_pdf_combined(mode, meta, order, lay, pdf_a_path, pdf_b_path, pages_a_str, pages_b_str):
         if mode == "Drag‑and‑Drop":
-            return build_pdf_drag(meta, lay)
+            if not meta:
+                raise gr.Error("Please build thumbnails before generating.")
+            return build_pdf_drag(meta, lay, pdf_a_path, pdf_b_path)
         else:
             return build_pdf_manual(pdf_a_path, pages_a_str, pdf_b_path, pages_b_str, order, lay)
 
     generate.click(
         fn=build_pdf_combined,
-        inputs=[ordering_mode, gallery_meta, final_order, layout, pdf_a, pages_a, pdf_b, pages_b],
+        inputs=[ordering_mode, gallery_meta, final_order, layout, pdf_a, pdf_b, pages_a, pages_b],
         outputs=result)
 
 if __name__ == "__main__":
