@@ -87,49 +87,7 @@ def build_pdf_from_order(pdf_a_obj, pdf_b_obj, order_str, layout, output_filenam
         return None
 
     if layout == "2-Up":
-        new_writer = PdfWriter()
-        # Collect all pages first
-        all_pages = []
-        for src, page_num in page_spec:
-            pdf_path = pdf_paths.get(src)
-            if not pdf_path:
-                raise gr.Error(f"PDF for source '{src}' is missing. Please upload it again.")
-            if src not in readers:
-                readers[src] = PdfReader(pdf_path)
-            if not 0 < page_num <= len(readers[src].pages):
-                raise gr.Error(f"Page number {page_num} for PDF {src} is out of range.")
-            all_pages.append(readers[src].pages[page_num - 1])
-
-        for i in range(0, len(all_pages), 2):
-            p1 = all_pages[i]
-
-            if i + 1 < len(all_pages):
-                p2 = all_pages[i+1]
-
-                # Get the dimensions of the pages
-                p1_width = float(p1.mediabox.width)
-                p1_height = float(p1.mediabox.height)
-                p2_width = float(p2.mediabox.width)
-                p2_height = float(p2.mediabox.height)
-
-                # Determine the dimensions for the new combined page
-                # Max height of the two pages
-                combined_height = max(p1_height, p2_height)
-                # Sum of widths of the two pages
-                combined_width = p1_width + p2_width
-
-                # Create a new blank page with the calculated dimensions
-                new_page = PageObject.create_blank_page(width=combined_width, height=combined_height)
-
-                # Add the first page to the left half
-                new_page.merge_page(p1)
-                # Add the second page to the right half, shifted by the width of the first page
-                new_page.merge_page(p2, (p1_width, 0))
-                new_writer.add_page(new_page)
-            else:
-                # Odd number of pages, add the last one alone
-                new_writer.add_page(p1)
-        writer = new_writer
+        gr.Warning("2-Up layout is not yet implemented. Generating a sequential PDF.")
 
     if not output_filename.lower().endswith(".pdf"):
         output_filename += ".pdf"
@@ -166,7 +124,7 @@ with gr.Blocks(title="PDF Extract & Merge") as demo:
 
     gr.Markdown("## 3. Generate Final PDF")
     output_filename = gr.Textbox(label="Output Filename (e.g., merged.pdf)", value="merged.pdf")
-    layout = gr.Radio(["Sequential", "2-Up"], value="Sequential", label="Layout")
+    layout = gr.Radio(["Sequential"], value="Sequential", label="Layout")
     generate_btn = gr.Button("Generate PDF", variant="primary")
     result = gr.File(label="Merged PDF")
 
