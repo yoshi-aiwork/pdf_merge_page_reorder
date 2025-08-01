@@ -7,7 +7,8 @@ Need to add a handwritten ("wet") signature to only the last page of a PDF while
 
 - Sign‑only the last page of long contractsSkip wasting paper on 20+ pages. Extract the final page, sign it, then merge it back in seconds.
 
--HR & onboarding paperworkMany HR forms still need a physical signature line. Print just that page, hand‑sign, and keep the file structure intact.
+- HR & onboarding paperworkMany HR forms still need a physical signature line. Print just that page, hand‑sign, and keep the file structure intact.
+  
 ## ✨ Features
 
 *   **Upload Two PDFs:** Easily upload your 'PDF A' and 'PDF B' files.
