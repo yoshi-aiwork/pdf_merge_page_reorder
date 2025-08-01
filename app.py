@@ -1,5 +1,5 @@
 import gradio as gr, tempfile, os, json, re
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter, PageObject
 from helpers import parse_ranges, parse_final_order, pdf_page_to_thumbnail
 
 # --- Helpers ---
@@ -56,7 +56,7 @@ def generate_final_preview_gallery(pdf_a_obj, pdf_b_obj, order_str):
 
     return preview_items
 
-def build_pdf_from_order(pdf_a_obj, pdf_b_obj, order_str, layout):
+def build_pdf_from_order(pdf_a_obj, pdf_b_obj, order_str, layout, output_filename):
     """Builds the final PDF based on the final_order string."""
     writer = PdfWriter()
     readers = {}
@@ -87,11 +87,58 @@ def build_pdf_from_order(pdf_a_obj, pdf_b_obj, order_str, layout):
         return None
 
     if layout == "2-Up":
-        gr.Warning("2-Up layout is not yet implemented. Generating a sequential PDF.")
+        new_writer = PdfWriter()
+        # Collect all pages first
+        all_pages = []
+        for src, page_num in page_spec:
+            pdf_path = pdf_paths.get(src)
+            if not pdf_path:
+                raise gr.Error(f"PDF for source '{src}' is missing. Please upload it again.")
+            if src not in readers:
+                readers[src] = PdfReader(pdf_path)
+            if not 0 < page_num <= len(readers[src].pages):
+                raise gr.Error(f"Page number {page_num} for PDF {src} is out of range.")
+            all_pages.append(readers[src].pages[page_num - 1])
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        writer.write(tmp)
-        return tmp.name
+        for i in range(0, len(all_pages), 2):
+            p1 = all_pages[i]
+
+            if i + 1 < len(all_pages):
+                p2 = all_pages[i+1]
+
+                # Get the dimensions of the pages
+                p1_width = float(p1.mediabox.width)
+                p1_height = float(p1.mediabox.height)
+                p2_width = float(p2.mediabox.width)
+                p2_height = float(p2.mediabox.height)
+
+                # Determine the dimensions for the new combined page
+                # Max height of the two pages
+                combined_height = max(p1_height, p2_height)
+                # Sum of widths of the two pages
+                combined_width = p1_width + p2_width
+
+                # Create a new blank page with the calculated dimensions
+                new_page = PageObject.create_blank_page(width=combined_width, height=combined_height)
+
+                # Add the first page to the left half
+                new_page.merge_page(p1)
+                # Add the second page to the right half, shifted by the width of the first page
+                new_page.merge_page(p2, (p1_width, 0))
+                new_writer.add_page(new_page)
+            else:
+                # Odd number of pages, add the last one alone
+                new_writer.add_page(p1)
+        writer = new_writer
+
+    if not output_filename.lower().endswith(".pdf"):
+        output_filename += ".pdf"
+    
+    # Create a temporary file with the desired filename in the system's temp directory
+    tmp_filepath = os.path.join(tempfile.gettempdir(), output_filename)
+    with open(tmp_filepath, "wb") as f:
+        writer.write(f)
+    return tmp_filepath
 
 # --- Gradio UI ---
 with gr.Blocks(title="PDF Extract & Merge") as demo:
@@ -118,6 +165,7 @@ with gr.Blocks(title="PDF Extract & Merge") as demo:
     )
 
     gr.Markdown("## 3. Generate Final PDF")
+    output_filename = gr.Textbox(label="Output Filename (e.g., merged.pdf)", value="merged.pdf")
     layout = gr.Radio(["Sequential", "2-Up"], value="Sequential", label="Layout")
     generate_btn = gr.Button("Generate PDF", variant="primary")
     result = gr.File(label="Merged PDF")
@@ -143,7 +191,7 @@ with gr.Blocks(title="PDF Extract & Merge") as demo:
 
     generate_btn.click(
         fn=build_pdf_from_order,
-        inputs=[pdf_a, pdf_b, final_order, layout],
+        inputs=[pdf_a, pdf_b, final_order, layout, output_filename],
         outputs=result
     )
 
