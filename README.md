@@ -1,4 +1,4 @@
-# 📄 PDF Extract & Merge Tool
+# 📄 PDF Extract & Merge & Page Reorder Tool
 
 Welcome to the PDF Extract & Merge Tool! This easy-to-use application helps you combine pages from two different PDF files into a single, new PDF. You can select specific pages, arrange them in any order you like, and even give your new PDF a custom filename.
 
